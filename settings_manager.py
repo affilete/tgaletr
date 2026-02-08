@@ -116,28 +116,50 @@ class SettingsManager:
             self._save_settings()
     
     @property
-    def chat_id(self) -> str:
+    def chat_id(self) -> int:
         with self._lock:
             # Try to get encrypted version first
             encrypted = self._settings.get("chat_id_encrypted")
             if encrypted and self._cipher:
                 try:
-                    return self._decrypt_value(encrypted)
+                    decrypted = self._decrypt_value(encrypted)
+                    return int(decrypted)
                 except Exception:
                     pass
             # Fallback to plaintext (for backwards compatibility)
-            return self._settings.get("chat_id", DEFAULT_SETTINGS["chat_id"])
+            chat_id_value = self._settings.get("chat_id", DEFAULT_SETTINGS["chat_id"])
+            # Convert to int if it's a string (backwards compatibility)
+            if isinstance(chat_id_value, str):
+                try:
+                    return int(chat_id_value)
+                except ValueError:
+                    # If conversion fails, return default
+                    return DEFAULT_SETTINGS["chat_id"]
+            return chat_id_value
     
     @chat_id.setter
-    def chat_id(self, value: str):
+    def chat_id(self, value):
+        # Accept both string and int, convert to int for validation
+        if isinstance(value, str):
+            try:
+                value = int(value)
+            except ValueError:
+                raise ValueError(f"Invalid chat_id: {value}. Must be an integer.")
+        elif not isinstance(value, int):
+            raise ValueError(f"Invalid chat_id type: {type(value)}. Must be int or str.")
+        
+        # Validate that it's not zero
+        if value == 0:
+            raise ValueError("chat_id cannot be 0")
+        
         with self._lock:
             if self._cipher:
-                # Encrypt and store
-                self._settings["chat_id_encrypted"] = self._encrypt_value(value)
+                # Encrypt and store as string
+                self._settings["chat_id_encrypted"] = self._encrypt_value(str(value))
                 # Remove old plaintext version if it exists
                 self._settings.pop("chat_id", None)
             else:
-                # Store as plaintext if encryption not available
+                # Store as integer if encryption not available
                 self._settings["chat_id"] = value
             self._save_settings()
     
