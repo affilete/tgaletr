@@ -64,8 +64,9 @@ async def async_main():
     logger.info("Settings loaded from .env")
 
     # Log the configured settings for debugging
+    from config import BOT_TOKEN
     logger.info(f"Configured Chat ID: {settings.chat_id} (type: {type(settings.chat_id).__name__})")
-    logger.info(f"Bot Token: {settings._settings.get('chat_id', 'N/A')}")  # Don't log full token
+    logger.info(f"Bot Token: {BOT_TOKEN[:20]}... (truncated)")
     logger.info(f"Owner ID: {OWNER_USER_ID}")
     logger.info(f"Alerts Enabled: {settings.alerts_enabled}")
 
