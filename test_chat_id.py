@@ -22,7 +22,8 @@ def test_chat_id_integer_conversion():
     print("TEST: Chat ID Integer Conversion")
     print("="*80)
     
-    # Create temporary settings file in current directory
+    # Note: Using current directory for temp file because SettingsManager has
+    # path traversal protection that requires files to be in current directory
     temp_file = f"test_settings_{uuid.uuid4().hex}.json"
     
     try:
@@ -107,7 +108,8 @@ def test_backward_compatibility():
     print("TEST: Backward Compatibility")
     print("="*80)
     
-    # Create temporary settings file with old format (string)
+    # Note: Using current directory for temp file because SettingsManager has
+    # path traversal protection that requires files to be in current directory
     temp_file = f"test_settings_old_{uuid.uuid4().hex}.json"
     
     try:

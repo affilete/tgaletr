@@ -122,15 +122,9 @@ async def async_main():
             logger.info(f"Validating access to chat {settings.chat_id}...")
             # Try to get chat info to verify bot has access
             chat = await bot_app.bot.get_chat(settings.chat_id)
-            logger.info(f"✅ Successfully connected to chat: {chat.title or chat.id}")
+            chat_name = chat.title if chat.title else f"Chat {chat.id}"
+            logger.info(f"✅ Successfully connected to chat: {chat_name}")
             logger.info(f"   Chat type: {chat.type}")
-            
-            # Additional check: try to send a test message (optional, commented out by default)
-            # await bot_app.bot.send_message(
-            #     chat_id=settings.chat_id,
-            #     text="✅ Bot started and connected successfully",
-            #     parse_mode="HTML"
-            # )
             
         except Exception as e:
             logger.error(f"❌ Failed to access chat {settings.chat_id}: {e}")
