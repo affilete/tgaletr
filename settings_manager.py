@@ -1,144 +1,58 @@
 """
 Settings Manager for persistent configuration with per-exchange settings.
-Provides thread-safe access to settings and handles JSON persistence.
+Provides thread-safe access to settings from .env file (read-only).
 """
 
-import json
 import threading
-from pathlib import Path
-from typing import Optional, Dict, Any, List
-from config import DEFAULT_SETTINGS, DEFAULT_EXCHANGE_SETTINGS
-
-try:
-    from cryptography.fernet import Fernet
-    ENCRYPTION_AVAILABLE = True
-except ImportError:
-    ENCRYPTION_AVAILABLE = False
-    print("⚠️ WARNING: cryptography module not found. Install with: pip install cryptography>=41.0.0")
+from typing import Dict, List
+from config import (
+    DEFAULT_SETTINGS,
+    DEFAULT_EXCHANGE_SETTINGS,
+    CHAT_ID,
+    DISTANCE_PCT,
+    ALERTS_ENABLED,
+)
 
 
 class SettingsManager:
-    """Thread-safe settings manager with JSON persistence and hierarchical resolution."""
+    """Thread-safe settings manager - reads from .env via config module."""
     
-    def __init__(self, settings_file: str = "settings.json"):
-        # Path traversal protection
-        settings_path = Path(settings_file).resolve()
+    def __init__(self, settings_file: str = None):
+        """
+        Initialize settings manager.
         
-        try:
-            settings_path.relative_to(Path.cwd())
-        except ValueError:
-            raise ValueError(
-                f"❌ Invalid settings file path: {settings_file}. "
-                "Must be within current directory."
-            )
-        
-        self.settings_file = settings_path
+        Args:
+            settings_file: Deprecated, kept for compatibility. Settings are now read from .env.
+        """
         self._lock = threading.Lock()
-        self._settings = {}
-        
-        # Initialize encryption if available
-        if ENCRYPTION_AVAILABLE:
-            self._init_encryption()
-        else:
-            self._cipher = None
-            self._encryption_key = None
-        
-        self._load_settings()
+        # Use default settings which are populated from .env
+        self._settings = DEFAULT_SETTINGS.copy()
     
-    def _init_encryption(self):
-        """Initialize or load encryption key."""
-        key_file = Path(".encryption_key")
-        if key_file.exists():
-            with open(key_file, 'rb') as f:
-                self._encryption_key = f.read()
-        else:
-            self._encryption_key = Fernet.generate_key()
-            with open(key_file, 'wb') as f:
-                f.write(self._encryption_key)
-            # Update .gitignore to ensure key is not committed
-            print("✅ Encryption key generated and saved to .encryption_key")
-        
-        self._cipher = Fernet(self._encryption_key)
-    
-    def _encrypt_value(self, value: str) -> str:
-        """Encrypt a string value."""
-        if not self._cipher:
-            return value
-        return self._cipher.encrypt(value.encode()).decode()
-    
-    def _decrypt_value(self, encrypted: str) -> str:
-        """Decrypt an encrypted string value."""
-        if not self._cipher:
-            return encrypted
-        try:
-            return self._cipher.decrypt(encrypted.encode()).decode()
-        except Exception:
-            # If decryption fails, return original value (might be plaintext from old version)
-            return encrypted
-    
-    def _load_settings(self):
-        """Load settings from JSON file, merge with defaults."""
-        with self._lock:
-            if self.settings_file.exists():
-                try:
-                    with open(self.settings_file, 'r') as f:
-                        loaded = json.load(f)
-                    # Merge loaded settings with defaults
-                    self._settings = {**DEFAULT_SETTINGS, **loaded}
-                except (json.JSONDecodeError, IOError) as e:
-                    print(f"Error loading settings: {e}, using defaults")
-                    self._settings = DEFAULT_SETTINGS.copy()
-            else:
-                # Create file with empty dict (will use defaults)
-                self._settings = DEFAULT_SETTINGS.copy()
-                self._save_settings()
-    
-    def _save_settings(self):
-        """Persist current settings to JSON file."""
-        # Called within lock context by callers
-        try:
-            with open(self.settings_file, 'w') as f:
-                json.dump(self._settings, f, indent=2)
-        except IOError as e:
-            print(f"Error saving settings: {e}")
-    
-    # Global Settings Properties
+    # Global Settings Properties (Read-Only from .env)
     
     @property
     def alerts_enabled(self) -> bool:
         with self._lock:
-            return self._settings.get("alerts_enabled", False)
+            return self._settings.get("alerts_enabled", ALERTS_ENABLED)
     
     @alerts_enabled.setter
     def alerts_enabled(self, value: bool):
+        """Set alerts enabled status (in-memory only)."""
         with self._lock:
             self._settings["alerts_enabled"] = value
-            self._save_settings()
     
     @property
     def chat_id(self) -> int:
+        """Get chat ID from config (read from .env)."""
         with self._lock:
-            # Try to get encrypted version first
-            encrypted = self._settings.get("chat_id_encrypted")
-            if encrypted and self._cipher:
-                try:
-                    decrypted = self._decrypt_value(encrypted)
-                    return int(decrypted)
-                except Exception:
-                    pass
-            # Fallback to plaintext (for backwards compatibility)
-            chat_id_value = self._settings.get("chat_id", DEFAULT_SETTINGS["chat_id"])
-            # Convert to int if it's a string (backwards compatibility)
-            if isinstance(chat_id_value, str):
-                try:
-                    return int(chat_id_value)
-                except ValueError:
-                    # If conversion fails, return default
-                    return DEFAULT_SETTINGS["chat_id"]
-            return chat_id_value
+            return self._settings.get("chat_id", CHAT_ID)
     
     @chat_id.setter
     def chat_id(self, value):
+        """
+        Set chat ID (in-memory only, deprecated).
+        Chat ID should be set in .env file.
+        """
         # Accept both string and int, convert to int for validation
         if isinstance(value, str):
             try:
@@ -153,26 +67,18 @@ class SettingsManager:
             raise ValueError("chat_id cannot be 0")
         
         with self._lock:
-            if self._cipher:
-                # Encrypt and store as string
-                self._settings["chat_id_encrypted"] = self._encrypt_value(str(value))
-                # Remove old plaintext version if it exists
-                self._settings.pop("chat_id", None)
-            else:
-                # Store as integer if encryption not available
-                self._settings["chat_id"] = value
-            self._save_settings()
+            self._settings["chat_id"] = value
     
     @property
     def global_distance(self) -> float:
         with self._lock:
-            return self._settings.get("global_distance_pct", DEFAULT_SETTINGS["global_distance_pct"])
+            return self._settings.get("global_distance_pct", DISTANCE_PCT)
     
     @global_distance.setter
     def global_distance(self, value: float):
+        """Set global distance (in-memory only)."""
         with self._lock:
             self._settings["global_distance_pct"] = value
-            self._save_settings()
     
     @property
     def scan_interval(self) -> int:
@@ -181,9 +87,9 @@ class SettingsManager:
     
     @scan_interval.setter
     def scan_interval(self, value: int):
+        """Set scan interval (in-memory only)."""
         with self._lock:
             self._settings["scan_interval"] = value
-            self._save_settings()
     
     @property
     def orderbook_depth(self) -> int:
@@ -192,9 +98,9 @@ class SettingsManager:
     
     @orderbook_depth.setter
     def orderbook_depth(self, value: int):
+        """Set orderbook depth (in-memory only)."""
         with self._lock:
             self._settings["orderbook_depth"] = value
-            self._save_settings()
     
     @property
     def global_blacklist(self) -> List[str]:
@@ -218,53 +124,48 @@ class SettingsManager:
         with self._lock:
             return self._settings.get("quote_currencies", DEFAULT_SETTINGS["quote_currencies"]).copy()
     
-    # Global Blacklist Management
+    # Global Blacklist Management (In-Memory)
     
     def add_global_blacklist(self, ticker: str):
-        """Add a ticker to the global blacklist."""
+        """Add a ticker to the global blacklist (in-memory only)."""
         ticker = ticker.upper()
         with self._lock:
             if "global_blacklist" not in self._settings:
                 self._settings["global_blacklist"] = []
             if ticker not in self._settings["global_blacklist"]:
                 self._settings["global_blacklist"].append(ticker)
-                self._save_settings()
     
     def remove_global_blacklist(self, ticker: str):
-        """Remove a ticker from the global blacklist."""
+        """Remove a ticker from the global blacklist (in-memory only)."""
         ticker = ticker.upper()
         with self._lock:
             if "global_blacklist" in self._settings and ticker in self._settings["global_blacklist"]:
                 self._settings["global_blacklist"].remove(ticker)
-                self._save_settings()
     
     def clear_global_blacklist(self):
-        """Clear the entire global blacklist."""
+        """Clear the entire global blacklist (in-memory only)."""
         with self._lock:
             self._settings["global_blacklist"] = []
-            self._save_settings()
     
-    # Global Ticker Overrides Management
+    # Global Ticker Overrides Management (In-Memory)
     
     def set_global_ticker_override(self, ticker: str, min_size: int):
-        """Set global ticker override."""
+        """Set global ticker override (in-memory only)."""
         ticker = ticker.upper()
         with self._lock:
             if "global_ticker_overrides" not in self._settings:
                 self._settings["global_ticker_overrides"] = {}
             self._settings["global_ticker_overrides"][ticker] = min_size
-            self._save_settings()
     
     def remove_global_ticker_override(self, ticker: str):
-        """Remove global ticker override."""
+        """Remove global ticker override (in-memory only)."""
         ticker = ticker.upper()
         with self._lock:
             if "global_ticker_overrides" in self._settings:
                 if ticker in self._settings["global_ticker_overrides"]:
                     del self._settings["global_ticker_overrides"][ticker]
-                    self._save_settings()
     
-    # Exchange Settings Management
+    # Exchange Settings Management (In-Memory)
     
     def get_exchange_min_size(self, exchange: str) -> int:
         """Get min_size for a specific exchange."""
@@ -275,7 +176,7 @@ class SettingsManager:
             return exch_settings.get("min_size", DEFAULT_EXCHANGE_SETTINGS["min_size"])
     
     def set_exchange_min_size(self, exchange: str, value: int):
-        """Set min_size for a specific exchange."""
+        """Set min_size for a specific exchange (in-memory only)."""
         exchange = exchange.lower()
         with self._lock:
             if "exchanges" not in self._settings:
@@ -283,7 +184,6 @@ class SettingsManager:
             if exchange not in self._settings["exchanges"]:
                 self._settings["exchanges"][exchange] = DEFAULT_EXCHANGE_SETTINGS.copy()
             self._settings["exchanges"][exchange]["min_size"] = value
-            self._save_settings()
     
     def get_exchange_min_lifetime(self, exchange: str) -> int:
         """Get min_lifetime for a specific exchange."""
@@ -294,7 +194,7 @@ class SettingsManager:
             return exch_settings.get("min_lifetime", DEFAULT_EXCHANGE_SETTINGS["min_lifetime"])
     
     def set_exchange_min_lifetime(self, exchange: str, value: int):
-        """Set min_lifetime for a specific exchange."""
+        """Set min_lifetime for a specific exchange (in-memory only)."""
         exchange = exchange.lower()
         with self._lock:
             if "exchanges" not in self._settings:
@@ -302,7 +202,6 @@ class SettingsManager:
             if exchange not in self._settings["exchanges"]:
                 self._settings["exchanges"][exchange] = DEFAULT_EXCHANGE_SETTINGS.copy()
             self._settings["exchanges"][exchange]["min_lifetime"] = value
-            self._save_settings()
     
     def get_exchange_ticker_overrides(self, exchange: str) -> Dict[str, int]:
         """Get ticker overrides for a specific exchange."""
@@ -313,7 +212,7 @@ class SettingsManager:
             return exch_settings.get("ticker_overrides", {}).copy()
     
     def set_exchange_ticker_override(self, exchange: str, ticker: str, min_size: int):
-        """Set ticker-specific min_size override for an exchange."""
+        """Set ticker-specific min_size override for an exchange (in-memory only)."""
         exchange = exchange.lower()
         ticker = ticker.upper()
         with self._lock:
@@ -324,10 +223,9 @@ class SettingsManager:
             if "ticker_overrides" not in self._settings["exchanges"][exchange]:
                 self._settings["exchanges"][exchange]["ticker_overrides"] = {}
             self._settings["exchanges"][exchange]["ticker_overrides"][ticker] = min_size
-            self._save_settings()
     
     def remove_exchange_ticker_override(self, exchange: str, ticker: str):
-        """Remove ticker-specific override for an exchange."""
+        """Remove ticker-specific override for an exchange (in-memory only)."""
         exchange = exchange.lower()
         ticker = ticker.upper()
         with self._lock:
@@ -336,7 +234,6 @@ class SettingsManager:
                     if "ticker_overrides" in self._settings["exchanges"][exchange]:
                         if ticker in self._settings["exchanges"][exchange]["ticker_overrides"]:
                             del self._settings["exchanges"][exchange]["ticker_overrides"][ticker]
-                            self._save_settings()
     
     def get_exchange_blacklist(self, exchange: str) -> List[str]:
         """Get blacklist for a specific exchange."""
@@ -347,7 +244,7 @@ class SettingsManager:
             return exch_settings.get("blacklist", []).copy()
     
     def add_exchange_blacklist(self, exchange: str, ticker: str):
-        """Add ticker to exchange-specific blacklist."""
+        """Add ticker to exchange-specific blacklist (in-memory only)."""
         exchange = exchange.lower()
         ticker = ticker.upper()
         with self._lock:
@@ -359,10 +256,9 @@ class SettingsManager:
                 self._settings["exchanges"][exchange]["blacklist"] = []
             if ticker not in self._settings["exchanges"][exchange]["blacklist"]:
                 self._settings["exchanges"][exchange]["blacklist"].append(ticker)
-                self._save_settings()
     
     def remove_exchange_blacklist(self, exchange: str, ticker: str):
-        """Remove ticker from exchange-specific blacklist."""
+        """Remove ticker from exchange-specific blacklist (in-memory only)."""
         exchange = exchange.lower()
         ticker = ticker.upper()
         with self._lock:
@@ -371,16 +267,14 @@ class SettingsManager:
                     if "blacklist" in self._settings["exchanges"][exchange]:
                         if ticker in self._settings["exchanges"][exchange]["blacklist"]:
                             self._settings["exchanges"][exchange]["blacklist"].remove(ticker)
-                            self._save_settings()
     
     def clear_exchange_blacklist(self, exchange: str):
-        """Clear the entire blacklist for an exchange."""
+        """Clear the entire blacklist for an exchange (in-memory only)."""
         exchange = exchange.lower()
         with self._lock:
             if "exchanges" in self._settings:
                 if exchange in self._settings["exchanges"]:
                     self._settings["exchanges"][exchange]["blacklist"] = []
-                    self._save_settings()
 
     
     # Hierarchical Resolution
@@ -435,13 +329,12 @@ class SettingsManager:
     # Authorization
     
     def add_authorized_user(self, user_id: int):
-        """Add a user to the authorized users list."""
+        """Add a user to the authorized users list (in-memory only)."""
         with self._lock:
             if "authorized_users" not in self._settings:
                 self._settings["authorized_users"] = []
             if user_id not in self._settings["authorized_users"]:
                 self._settings["authorized_users"].append(user_id)
-                self._save_settings()
     
     def is_authorized(self, user_id: int) -> bool:
         """Check if a user is authorized. If no users are set, allow everyone."""
@@ -460,7 +353,7 @@ class SettingsManager:
         
         # Get global settings
         alerts_status = "✅ Включены" if settings.get("alerts_enabled", False) else "❌ Выключены"
-        global_dist = settings.get("global_distance_pct", DEFAULT_SETTINGS["global_distance_pct"])
+        global_dist = settings.get("global_distance_pct", DISTANCE_PCT)
         
         text = "📊 Текущие настройки\n\n"
         text += f"🔔 Алерты: {alerts_status}\n\n"
@@ -522,15 +415,14 @@ class SettingsManager:
         html += "<b>Global Settings:</b>\n"
         html += f"• Alerts Enabled: {'✅' if settings.get('alerts_enabled') else '❌'}\n"
         html += f"• Chat ID: <code>{settings.get('chat_id')}</code>\n"
-        html += f"• Min Size: ${settings.get('min_size', 0):,.0f}\n"
-        html += f"• Distance: {settings.get('distance_pct', 0):.2f}%\n"
+        html += f"• Distance: {settings.get('global_distance_pct', 0):.2f}%\n"
         html += f"• Scan Interval: {settings.get('scan_interval', 0)}s\n"
         html += f"• Orderbook Depth: {settings.get('orderbook_depth', 0)}\n"
         html += f"• Quote Currencies: {', '.join(settings.get('quote_currencies', []))}\n"
         html += "\n"
         
         # Blacklist
-        blacklist = settings.get('blacklist', [])
+        blacklist = settings.get('global_blacklist', [])
         html += f"<b>Blacklist ({len(blacklist)}):</b>\n"
         if blacklist:
             html += f"• {', '.join(blacklist)}\n"
@@ -539,28 +431,25 @@ class SettingsManager:
         html += "\n"
         
         # Ticker Overrides
-        ticker_overrides = settings.get('ticker_overrides', {})
+        ticker_overrides = settings.get('global_ticker_overrides', {})
         html += f"<b>Ticker Overrides ({len(ticker_overrides)}):</b>\n"
         if ticker_overrides:
-            for ticker, overrides in ticker_overrides.items():
-                html += f"• {ticker}: min_size=${overrides.get('min_size', 0):,.0f}\n"
+            for ticker, min_size in list(ticker_overrides.items())[:5]:  # Show max 5
+                html += f"• {ticker}: ${min_size:,.0f}\n"
+            if len(ticker_overrides) > 5:
+                html += f"• ... and {len(ticker_overrides) - 5} more\n"
         else:
             html += "• None\n"
         html += "\n"
         
         # Exchange Settings
-        exchange_settings = settings.get('exchange_settings', {})
-        html += f"<b>Exchange Settings ({len(exchange_settings)}):</b>\n"
+        exchange_settings = settings.get('exchanges', {})
+        html += f"<b>Exchange Settings:</b>\n"
         if exchange_settings:
             for exchange, exch_settings in exchange_settings.items():
                 html += f"• <b>{exchange.upper()}</b>:\n"
-                for key, value in exch_settings.items():
-                    if key == "min_size":
-                        html += f"  - {key}: ${value:,.0f}\n"
-                    elif key == "distance_pct":
-                        html += f"  - {key}: {value:.2f}%\n"
-                    else:
-                        html += f"  - {key}: {value}\n"
+                html += f"  - min_size: ${exch_settings.get('min_size', 0):,.0f}\n"
+                html += f"  - min_lifetime: {exch_settings.get('min_lifetime', 0)}s\n"
         else:
             html += "• None\n"
         html += "\n"

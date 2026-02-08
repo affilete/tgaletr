@@ -3,13 +3,13 @@ Main entry point for the Cryptocurrency Density Scanner.
 Runs the Telegram bot and scanner concurrently in a single async event loop.
 """
 
-import argparse
 import asyncio
 import logging
 import signal
 import sys
 from pathlib import Path
 
+from config import OWNER_USER_ID
 from settings_manager import SettingsManager
 from scanner import DensityScanner, DensityAlert
 from bot import build_bot_app
@@ -54,26 +54,20 @@ logger = setup_logging()
 
 async def async_main():
     """Async main entry point."""
-    parser = argparse.ArgumentParser(description="Cryptocurrency Density Scanner Bot")
-    parser.add_argument("--chat_id", type=str, help="Telegram chat ID for alerts")
-    args = parser.parse_args()
-
     logger.info("=" * 60)
     logger.info("Starting Cryptocurrency Density Scanner")
     logger.info("=" * 60)
 
     killer = GracefulKiller()
 
-    settings = SettingsManager("settings.json")
-    logger.info("Settings loaded")
+    settings = SettingsManager()
+    logger.info("Settings loaded from .env")
 
-    if args.chat_id:
-        settings.chat_id = args.chat_id
-        logger.info(f"Chat ID set from CLI: {args.chat_id}")
-
-    # Log the configured chat ID for debugging
-    logger.info(f"Configured Chat ID: {settings.chat_id}")
-    logger.info(f"Chat ID type: {type(settings.chat_id).__name__}")
+    # Log the configured settings for debugging
+    logger.info(f"Configured Chat ID: {settings.chat_id} (type: {type(settings.chat_id).__name__})")
+    logger.info(f"Bot Token: {settings._settings.get('chat_id', 'N/A')}")  # Don't log full token
+    logger.info(f"Owner ID: {OWNER_USER_ID}")
+    logger.info(f"Alerts Enabled: {settings.alerts_enabled}")
 
     bot_app = build_bot_app(settings)
     logger.info("Telegram bot initialized")
@@ -133,11 +127,12 @@ async def async_main():
                 "  1. Chat ID is correct (use @userinfobot to get it)\n"
                 "  2. Bot is added to the chat/group\n"
                 "  3. Bot has permission to send messages\n"
-                f"  4. For groups, Chat ID should be negative (e.g., -1003892216818)\n"
+                f"  4. For groups, Chat ID should be negative (e.g., -5017751590)\n"
                 f"  Current Chat ID: {settings.chat_id}"
             )
-            # Don't exit, allow bot to start but warn user
-            logger.warning("Bot will continue but alerts may fail to send")
+            logger.error("❌ STOPPING bot due to chat access failure")
+            logger.error("   Fix the .env file and restart the bot")
+            return  # Exit early - don't start the bot
         
         await bot_app.updater.start_polling(
             allowed_updates=["message", "callback_query"]
