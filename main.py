@@ -71,6 +71,10 @@ async def async_main():
         settings.chat_id = args.chat_id
         logger.info(f"Chat ID set from CLI: {args.chat_id}")
 
+    # Log the configured chat ID for debugging
+    logger.info(f"Configured Chat ID: {settings.chat_id}")
+    logger.info(f"Chat ID type: {type(settings.chat_id).__name__}")
+
     bot_app = build_bot_app(settings)
     logger.info("Telegram bot initialized")
 
@@ -98,12 +102,49 @@ async def async_main():
                 )
                 logger.debug(f"Alert sent: {alert.symbol}")
             except Exception as e:
-                logger.error(f"Error sending alert: {e}")
+                logger.error(f"Error sending alert to chat {settings.chat_id}: {e}")
+                # Log additional details for debugging
+                if "chat not found" in str(e).lower():
+                    logger.error(
+                        f"Chat {settings.chat_id} not found. "
+                        "Please ensure: 1) Bot is added to the chat, "
+                        "2) Chat ID is correct (use @userinfobot), "
+                        "3) Bot has permission to send messages"
+                    )
 
     scanner = DensityScanner(settings, alert_callback)
 
     async with bot_app:
         await bot_app.start()
+        
+        # Validate chat access before starting scanner
+        try:
+            logger.info(f"Validating access to chat {settings.chat_id}...")
+            # Try to get chat info to verify bot has access
+            chat = await bot_app.bot.get_chat(settings.chat_id)
+            logger.info(f"✅ Successfully connected to chat: {chat.title or chat.id}")
+            logger.info(f"   Chat type: {chat.type}")
+            
+            # Additional check: try to send a test message (optional, commented out by default)
+            # await bot_app.bot.send_message(
+            #     chat_id=settings.chat_id,
+            #     text="✅ Bot started and connected successfully",
+            #     parse_mode="HTML"
+            # )
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to access chat {settings.chat_id}: {e}")
+            logger.error(
+                "Please check:\n"
+                "  1. Chat ID is correct (use @userinfobot to get it)\n"
+                "  2. Bot is added to the chat/group\n"
+                "  3. Bot has permission to send messages\n"
+                f"  4. For groups, Chat ID should be negative (e.g., -1003892216818)\n"
+                f"  Current Chat ID: {settings.chat_id}"
+            )
+            # Don't exit, allow bot to start but warn user
+            logger.warning("Bot will continue but alerts may fail to send")
+        
         await bot_app.updater.start_polling(
             allowed_updates=["message", "callback_query"]
         )

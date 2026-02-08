@@ -23,7 +23,22 @@ if not BOT_TOKEN or BOT_TOKEN == "your_bot_token_here":
         "Please set a valid token in .env file"
     )
 
-DEFAULT_CHAT_ID = os.environ.get("DEFAULT_CHAT_ID", "-1001234567890")  # Placeholder - user should replace
+# Default Chat ID for sending alerts
+# Parse as integer (can be negative for groups/channels)
+DEFAULT_CHAT_ID_STR = os.environ.get("DEFAULT_CHAT_ID", "-1001234567890")
+try:
+    DEFAULT_CHAT_ID = int(DEFAULT_CHAT_ID_STR)
+    # Validate format: should be non-zero, groups typically start with -100
+    if DEFAULT_CHAT_ID == 0:
+        raise ValueError("DEFAULT_CHAT_ID cannot be 0")
+    # Log warning if using placeholder
+    if DEFAULT_CHAT_ID == -1001234567890:
+        print("⚠️ WARNING: Using placeholder DEFAULT_CHAT_ID. Please update in .env file")
+except ValueError as e:
+    raise ValueError(
+        f"❌ DEFAULT_CHAT_ID must be a valid integer (Telegram Chat ID), got: {DEFAULT_CHAT_ID_STR}. "
+        f"For groups/channels, use negative values like -1003892216818"
+    ) from e
 
 # Owner User ID - required for bot authorization
 OWNER_USER_ID_STR = os.environ.get("OWNER_USER_ID", "0")
