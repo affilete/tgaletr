@@ -1,5 +1,6 @@
 """
 Configuration constants and defaults for the cryptocurrency density scanner.
+All settings are loaded from .env file.
 """
 
 import os
@@ -12,36 +13,49 @@ load_dotenv()
 # Check for .env file existence
 env_path = Path('.env')
 if not env_path.exists():
-    print("⚠️ WARNING: .env file not found! Create it from .env.example")
-    print("Required variables: BOT_TOKEN, OWNER_USER_ID, DEFAULT_CHAT_ID")
+    raise ValueError(
+        "❌ .env file not found!\n"
+        "Please create it from .env.example with the following required variables:\n"
+        "  - BOT_TOKEN\n"
+        "  - OWNER_USER_ID\n"
+        "  - CHAT_ID"
+    )
 
 # Telegram Bot Configuration
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 if not BOT_TOKEN or BOT_TOKEN == "your_bot_token_here":
     raise ValueError(
-        "❌ BOT_TOKEN is not set or is placeholder value. "
-        "Please set a valid token in .env file"
+        "❌ BOT_TOKEN is not set or is placeholder value.\n"
+        "Please set a valid token in .env file (get it from @BotFather)"
     )
 
-# Default Chat ID for sending alerts
-# Parse as integer (can be negative for groups/channels)
-DEFAULT_CHAT_ID_STR = os.environ.get("DEFAULT_CHAT_ID", "-1001234567890")
+# Chat ID for sending alerts (required, can be negative for groups)
+CHAT_ID_STR = os.environ.get("CHAT_ID")
+if not CHAT_ID_STR:
+    raise ValueError(
+        "❌ CHAT_ID is not set in .env file.\n"
+        "For groups: use negative number (e.g., -5017751590)\n"
+        "Get it by adding @userinfobot to your group"
+    )
+
 try:
-    DEFAULT_CHAT_ID = int(DEFAULT_CHAT_ID_STR)
-    # Validate format: should be non-zero, groups typically start with -100
-    if DEFAULT_CHAT_ID == 0:
-        raise ValueError("DEFAULT_CHAT_ID cannot be 0")
-    # Log warning if using placeholder
-    if DEFAULT_CHAT_ID == -1001234567890:
-        print("⚠️ WARNING: Using placeholder DEFAULT_CHAT_ID. Please update in .env file")
+    CHAT_ID = int(CHAT_ID_STR)
+    if CHAT_ID == 0:
+        raise ValueError("CHAT_ID cannot be 0")
 except ValueError as e:
     raise ValueError(
-        f"❌ DEFAULT_CHAT_ID must be a valid integer (Telegram Chat ID), got: {DEFAULT_CHAT_ID_STR}. "
-        f"For groups/channels, use negative values like -1003892216818"
+        f"❌ CHAT_ID must be a valid integer, got: {CHAT_ID_STR}\n"
+        f"For groups/channels, use negative values (e.g., -5017751590)"
     ) from e
 
 # Owner User ID - required for bot authorization
-OWNER_USER_ID_STR = os.environ.get("OWNER_USER_ID", "0")
+OWNER_USER_ID_STR = os.environ.get("OWNER_USER_ID")
+if not OWNER_USER_ID_STR:
+    raise ValueError(
+        "❌ OWNER_USER_ID is not set in .env file.\n"
+        "Get your Telegram user ID from @userinfobot"
+    )
+
 try:
     OWNER_USER_ID = int(OWNER_USER_ID_STR)
     if OWNER_USER_ID == 0:
@@ -50,6 +64,11 @@ except ValueError as e:
     raise ValueError(
         f"❌ OWNER_USER_ID must be a valid Telegram user ID, got: {OWNER_USER_ID_STR}"
     ) from e
+
+# Optional settings with defaults
+DISTANCE_PCT = float(os.environ.get("DISTANCE_PCT", "3.0"))
+MIN_SIZE = int(os.environ.get("MIN_SIZE", "1000000"))
+ALERTS_ENABLED = os.environ.get("ALERTS_ENABLED", "true").lower() in ("true", "1", "yes")
 
 # Supported Exchanges (name -> ccxt_id and label)
 SUPPORTED_EXCHANGES = {
@@ -70,9 +89,9 @@ SKIP_PREFIXES = ("TEST", "XYZ")
 # Test/demo/sandbox patterns to filter (case-insensitive)
 SKIP_PATTERNS = ("DEMO", "SANDBOX", "MOCK")
 
-# Default Global Settings
+# Default Global Settings (read from .env where applicable)
 DEFAULT_SETTINGS = {
-    "global_distance_pct": 3.0,  # Distance from spread in %
+    "global_distance_pct": DISTANCE_PCT,  # Distance from spread in %
     "global_blacklist": ["BCH", "QQQ", "TSLA", "XAU", "HAG", "PAXG", "XAG", "USDC"],  # Global list of tickers to skip
     "global_ticker_overrides": {
         "BTC": 30000000,
@@ -99,12 +118,12 @@ DEFAULT_SETTINGS = {
     },
     "scan_interval": 30,  # Seconds between scans
     "orderbook_depth": 50,  # Number of order book levels to fetch
-    "alerts_enabled": False,  # Alerts disabled by default
+    "alerts_enabled": ALERTS_ENABLED,  # From .env
     "authorized_users": [],  # List of authorized Telegram user IDs (empty = allow all)
     "quote_currencies": ["USDT", "USD", "USDC", "BUSD"],  # Supported quote currencies
-    "chat_id": DEFAULT_CHAT_ID,
+    "chat_id": CHAT_ID,  # From .env
     "exchanges": {
-        "hyperliquid": {"min_size": 1000000, "ticker_overrides": {}, "blacklist": [], "min_lifetime": 0},
+        "hyperliquid": {"min_size": MIN_SIZE, "ticker_overrides": {}, "blacklist": [], "min_lifetime": 0},
     },
 }
 
