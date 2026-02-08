@@ -4,7 +4,7 @@ Provides thread-safe access to settings from .env file (read-only).
 """
 
 import threading
-from typing import Dict, List
+from typing import Dict, List, Optional
 from config import (
     DEFAULT_SETTINGS,
     DEFAULT_EXCHANGE_SETTINGS,
@@ -17,7 +17,7 @@ from config import (
 class SettingsManager:
     """Thread-safe settings manager - reads from .env via config module."""
     
-    def __init__(self, settings_file: str = None):
+    def __init__(self, settings_file: Optional[str] = None):
         """
         Initialize settings manager.
         
@@ -434,8 +434,13 @@ class SettingsManager:
         ticker_overrides = settings.get('global_ticker_overrides', {})
         html += f"<b>Ticker Overrides ({len(ticker_overrides)}):</b>\n"
         if ticker_overrides:
-            for ticker, min_size in list(ticker_overrides.items())[:5]:  # Show max 5
+            # Show first 5 items efficiently
+            count = 0
+            for ticker, min_size in ticker_overrides.items():
+                if count >= 5:
+                    break
                 html += f"• {ticker}: ${min_size:,.0f}\n"
+                count += 1
             if len(ticker_overrides) > 5:
                 html += f"• ... and {len(ticker_overrides) - 5} more\n"
         else:

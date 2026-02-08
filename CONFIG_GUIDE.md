@@ -15,7 +15,7 @@ The bot now uses a simplified configuration system that reads all settings from 
    ```env
    BOT_TOKEN=your_bot_token_from_botfather
    OWNER_USER_ID=your_telegram_user_id
-   CHAT_ID=-5017751590  # For groups: negative number
+   CHAT_ID=-1001234567890  # For groups: negative number
    DISTANCE_PCT=3.0
    MIN_SIZE=1000000
    ALERTS_ENABLED=true
@@ -34,7 +34,7 @@ The bot now uses a simplified configuration system that reads all settings from 
 
 ### CHAT_ID
 - **CRITICAL**: This is where alerts are sent
-- **For groups/supergroups**: Use negative number (e.g., `-5017751590`)
+- **For groups/supergroups**: Use negative number (e.g., `-1001234567890`)
 - **For private chats**: Use positive number (e.g., `123456789`)
 - How to get:
   1. Add [@userinfobot](https://t.me/userinfobot) to your group
@@ -65,12 +65,12 @@ When you start the bot with `python main.py`, you should see:
 Starting Cryptocurrency Density Scanner
 ============================================================
 Settings loaded from .env
-Configured Chat ID: -5017751590 (type: int)
-Bot Token: 8397626686:AAF... (truncated)
-Owner ID: 8329204739
+Configured Chat ID: -1001234567890 (type: int)
+Bot Token: 1234567890:ABC... (truncated)
+Owner ID: 123456789
 Alerts Enabled: True
 Telegram bot initialized
-Validating access to chat -5017751590...
+Validating access to chat -1001234567890...
 ✅ Successfully connected to chat: [Your Group Name]
    Chat type: supergroup
 Bot is ready! Use /start to begin
@@ -80,7 +80,7 @@ Bot is ready! Use /start to begin
 
 ### "Chat not found" error
 1. **Verify Chat ID is correct**: Use [@userinfobot](https://t.me/userinfobot) to get the exact ID
-2. **For groups**: Chat ID must be negative (e.g., `-5017751590`)
+2. **For groups**: Chat ID must be negative (e.g., `-1001234567890`)
 3. **Bot must be in the chat**: Add your bot to the group/channel
 4. **Bot needs permissions**: Ensure bot can send messages
 

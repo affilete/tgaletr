@@ -9,7 +9,7 @@ import signal
 import sys
 from pathlib import Path
 
-from config import OWNER_USER_ID
+from config import OWNER_USER_ID, BOT_TOKEN
 from settings_manager import SettingsManager
 from scanner import DensityScanner, DensityAlert
 from bot import build_bot_app
@@ -64,7 +64,6 @@ async def async_main():
     logger.info("Settings loaded from .env")
 
     # Log the configured settings for debugging
-    from config import BOT_TOKEN
     logger.info(f"Configured Chat ID: {settings.chat_id} (type: {type(settings.chat_id).__name__})")
     logger.info(f"Bot Token: {BOT_TOKEN[:20]}... (truncated)")
     logger.info(f"Owner ID: {OWNER_USER_ID}")
